@@ -32,3 +32,60 @@ The project currently consists of the following services:
                   v
             Eureka Server
 
+```
+## Services
+
+### Config Server
+
+The Config Server provides centralized configuration management for all microservices.
+
+Responsibilities:
+
+- Centralized configuration
+- Externalized application properties
+- Configuration management for multiple services
+
+### Eureka Server
+
+Eureka Server is used for service discovery in the microservices architecture.
+
+Responsibilities:
+
+- Registers microservices
+- Helps services discover each other
+- Maintains information about available services
+
+### API Gateway
+
+The API Gateway acts as the main entry point for client requests.
+
+Responsibilities:
+
+- Routes requests to the appropriate microservices
+- Provides a centralized entry point
+- Integrates with Eureka Service Discovery
+
+### User Service
+
+The User Service handles user-related operations.
+
+Responsibilities:
+
+- Manage user information
+- Provide user details to other microservices
+- Handle user-related exceptions
+
+### Payment Service
+
+The Payment Service handles payment and transaction-related operations.
+
+Responsibilities:
+
+- Retrieve payment details
+- Process transactions
+- Retrieve transaction information
+- Communicate with User Service using OpenFeign
+- Handle exceptions
+- Validate requests
+- Support idempotent transactions
+- Implement resilience patterns
