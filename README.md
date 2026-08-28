@@ -31,3 +31,15 @@ The project currently consists of the following services:
                   |
                   v
             Eureka Server
+
+
+Services
+Config Server
+
+The Config Server provides centralized configuration management for all microservices.
+
+Responsibilities:
+
+- Centralized configuration
+- Externalized application properties
+- Configuration management for multiple services
