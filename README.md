@@ -89,3 +89,39 @@ Responsibilities:
 - Validate requests
 - Support idempotent transactions
 - Implement resilience patterns
+
+
+## Technologies Used
+
+### Programming Language
+- Java
+
+### Framework
+- Spring Boot
+
+### Spring Cloud
+- Spring Cloud Config
+- Netflix Eureka
+- Spring Cloud Gateway
+- Spring Cloud OpenFeign
+
+### Resilience
+- Resilience4j
+- Circuit Breaker
+- Retry
+- Bulkhead
+- Fallback Mechanism
+
+### Validation
+- Jakarta Bean Validation
+
+### Build Tool
+- Maven
+
+### Other Technologies and Tools
+- REST APIs
+- Git
+- GitHub
+- Lombok
+- Eclipse IDE
+- Postman
