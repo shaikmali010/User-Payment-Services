@@ -1,13 +1,15 @@
 package com.stackly.paymentService.service;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.stackly.paymentService.client.UserClient;
+import com.stackly.paymentService.dto.PaymentRequestDto;
 import com.stackly.paymentService.dto.PaymentResponseDto;
 import com.stackly.paymentService.dto.TransactionRequestDto;
 import com.stackly.paymentService.dto.TransactionResponseDto;
@@ -17,74 +19,96 @@ import com.stackly.paymentService.exception.IdempotentNotFoundException;
 import com.stackly.paymentService.exception.PaymentNotFoundException;
 import com.stackly.paymentService.exception.TransactionNotFoundException;
 import com.stackly.paymentService.model.Payment;
+import com.stackly.paymentService.model.Transaction;
+import com.stackly.paymentService.repository.PaymentRepository;
+import com.stackly.paymentService.repository.TransactionRepository;
 import com.stackly.paymentService.util.IdempotencyStore;
 
+import lombok.RequiredArgsConstructor;
+
 @Service
+@RequiredArgsConstructor
 public class PaymentService {
 	
 	private final UserClientService userClientService;
 	private final IdempotencyStore idempotencyStore;
 	private final UserClient userClient;
+	private final PaymentRepository paymentRepository;
+	private final TransactionRepository transactionRepository;
 	
-	private final Map<Long, Payment> payments = new HashMap<>();
-	private final Map<Long, TransactionResponseDto> transactions = new HashMap<>();
+	private static final Logger log =
+	        LoggerFactory.getLogger(PaymentService.class);
 	
-	private Long transactionSequence = 0L;
-	
-	
-//	========================================================================================
-	public PaymentService(UserClientService userClientService, IdempotencyStore idempotencyStore, UserClient userClient) {
+
+	public PaymentResponseDto createPayment(PaymentRequestDto request) {
 		
-		this.userClientService = userClientService;
-		this.idempotencyStore = idempotencyStore;
-		this.userClient = userClient;
+		Payment payment = new Payment();
 		
-		payments.put(1L, new Payment(1L, 1L, new BigDecimal("5000"), "SUCCESS"));
-		payments.put(2L, new Payment(2L, 2L, new BigDecimal("2500"), "SUCCESS"));
-		payments.put(3L, new Payment(3L, 1L, new BigDecimal("6000"), "SUCCESS"));
-		payments.put(4L, new Payment(4L, 3L, new BigDecimal("3000"), "SUCCESS"));
+		payment.setUserId(request.getUserId());
+		payment.setAmount(request.getAmount());
 		
+		Payment savedPayment = paymentRepository.save(payment);
+		
+		UserResponseDto user = userClientService.getUserById(savedPayment.getUserId());
+		
+		return PaymentResponseDto.builder()
+				.paymentId(savedPayment.getPaymentId())
+				.userId(savedPayment.getUserId())
+				.amount(savedPayment.getAmount())
+				.userName(user.getUserName())
+				.email(user.getEmail())
+				.build();
 	}
 	
 //	==================================================================
 	public PaymentResponseDto getPaymentById(Long paymentId) {
 		
-		Payment payment = payments.get(paymentId);
+		Payment payment = paymentRepository.findById(paymentId)
+				.orElseThrow(() -> new PaymentNotFoundException("Payment Not found with id "+paymentId));
 		
-		if(payment == null) {
-			throw new PaymentNotFoundException("Payment not found with id "+paymentId);
-		}
+		UserResponseDto user = userClientService
+				.getUserById(payment.getUserId());
 		
-		UserResponseDto user = userClientService.getUserById(payment.getUserId());
-		
-		return new PaymentResponseDto(
-				payment.getPaymentId(),
-				payment.getUserId(),
-				payment.getAmount(),
-				user.getUserName(),
-				user.getEmail());
+		return PaymentResponseDto.builder()
+				.paymentId(payment.getPaymentId())
+				.userId(payment.getUserId())
+				.userName(user.getUserName())
+				.email(user.getEmail())
+				.amount(user.getBalance())
+				.build();
 	}
 	
 //	====================================================================
 	
 	public List<PaymentResponseDto> getPaymentsByUserId(Long userId){
-		return payments.values()
-				.stream()
-				.filter(payment -> payment.getUserId().equals(userId))
-				.map(payment -> new PaymentResponseDto(
-						payment.getPaymentId(),
-						payment.getUserId(),
-						payment.getAmount(),
-						null,
-						null
-						))
+		
+		List<Payment> payments = paymentRepository.findByUserId(userId);
+		
+		return payments.stream().map(payment -> {
+			UserResponseDto user = 
+					userClientService.getUserById(payment.getUserId());
+			
+			return PaymentResponseDto.builder()
+					.paymentId(payment.getPaymentId())
+					.userId(payment.getUserId())
+					.amount(payment.getAmount())
+					.userName(user.getUserName())
+					.email(user.getEmail())
+					.build();
+		})
 				.toList();
+				
 	}
 	
 	
 //	=====================================================================
 	public synchronized TransactionResponseDto transaction(
 			TransactionRequestDto request, String idempotencyKey) {
+		
+		log.info("Starting transaction. Sender: {}, Receiver: {}, Amount: {}",
+		        request.getSenderId(),
+		        request.getReceiverId(),
+		        request.getAmount());
 		
 		if(idempotencyKey == null || idempotencyKey.isBlank()) {
 			throw new IdempotentNotFoundException("Idempotency-Key is required");
@@ -122,38 +146,78 @@ public class PaymentService {
 		
 		BigDecimal receiverBalance = receiver.getBalance().add(request.getAmount());
 				
-//		Update sender
-		userClient.updateBalance(sender.getUserId(), senderBalance);
+		try {
+			
+			log.info("Updating sender balance");
+			userClient.updateBalance(
+					sender.getUserId(), 
+					senderBalance);
+			
+			log.info("Updating receiver balance");
+			userClient.updateBalance(
+					receiver.getUserId(), 
+					receiverBalance);		
+			
+		}catch(Exception e) {
+			
+			log.error("Transaction failed. Starting compensation", e);
+			
+			userClient.updateBalance(
+					sender.getUserId(), 
+					sender.getBalance());
+			
+			throw new RuntimeException(
+					"Transaction failed. Sender balance restored.", e);
+			
+		}
 		
-//		Update receiver balance
-		userClient.updateBalance(receiver.getUserId(), receiverBalance);
+		// Save successful payment in database
+		Payment payment = new Payment();
+
+		payment.setUserId(sender.getUserId());
+		payment.setAmount(request.getAmount());
+
+		paymentRepository.save(payment);
 		
-		Long transactionId = ++transactionSequence;
+		log.info("Transaction completed successfully");
 		
-		TransactionResponseDto transaction = new TransactionResponseDto(
-				transactionId,
-				sender.getUserId(),
-				receiver.getUserId(),
-				request.getAmount(),
-				"SUCCESS");
+		// Save transaction in database
+
+		Transaction transaction = new Transaction();
+
+		transaction.setSenderId(sender.getUserId());
+		transaction.setReceiverId(receiver.getUserId());
+		transaction.setAmount(request.getAmount());
+		transaction.setStatus("SUCCESS");
+
+		Transaction savedTransaction = transactionRepository.save(transaction);
 		
-		transactions.put(transaction.getTransactionId(), transaction);
+		TransactionResponseDto response = new TransactionResponseDto(
+		        savedTransaction.getTransactionId(),
+		        savedTransaction.getSenderId(),
+		        savedTransaction.getReceiverId(),
+		        savedTransaction.getAmount(),
+		        savedTransaction.getStatus()
+		);
 		
-		idempotencyStore.save(idempotencyKey, transaction);
+
+			idempotencyStore.save(idempotencyKey, response);
 		
-	  return transaction;
-		
+			return response;
 	}
 	
 //	========================================================
 	public TransactionResponseDto getTransactionById(Long transactionId) {
 		
-		TransactionResponseDto transaction = transactions.get(transactionId);
-		
-		if(transaction == null) {
-			throw new TransactionNotFoundException("Transaction not found with id "+transactionId);
-		}
-		return transaction;
+		Transaction transaction = transactionRepository.findById(transactionId)
+				.orElseThrow(() -> new TransactionNotFoundException("Transaction not found with Id "+transactionId));
+
+		return new TransactionResponseDto(
+					transaction.getTransactionId(),
+					transaction.getSenderId(),
+					transaction.getReceiverId(),
+					transaction.getAmount(),
+					transaction.getStatus());
 	}
 	
 	

@@ -6,25 +6,48 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.stackly.userService.dto.UserRequestDto;
 import com.stackly.userService.dto.UserResponseDto;
+import com.stackly.userService.exception.UserExistException;
 import com.stackly.userService.exception.UserNotFoundException;
 import com.stackly.userService.model.User;
+import com.stackly.userService.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 	
-	private final Map<Long, User> users = new HashMap<>();
+	private final UserRepository userRepository;
 	
-	public UserService() {
-		users.put(1L, new User(1L, "Shaik", "shaik12@gmail.com", new BigDecimal(10000)));
-		users.put(2L, new User(2L, "mulla", "mulla12@gmail.com", new BigDecimal(15000)));
-		users.put(3L, new User(3L, "syed", "syed12@gmail.com", new BigDecimal(20000)));
+	public UserResponseDto createUser(UserRequestDto request) {
+		
+		if(userRepository.existsByEmail(request.getEmail())) {
+			throw new UserExistException("User already Exist with that  mail");
+		}
+		
+		User user = new User();
+		
+		user.setUserName(request.getUserName());
+		user.setEmail(request.getEmail());
+		user.setBalance(request.getBalance());
+		
+		User savedUser = userRepository.save(user);
+		
+		return UserResponseDto.builder()
+				.userId(savedUser.getUserId())
+				.userName(savedUser.getUserName())
+				.email(savedUser.getEmail())
+				.balance(savedUser.getBalance())
+				.build();
 		
 	}
 	
 	public UserResponseDto getUserById(Long userId) {
 		
-		User user = users.get(userId);
+		User user = userRepository.findById(userId)
+				.orElseThrow(() -> new UserNotFoundException("User not found"));
 		
 		if(user == null) {
 			throw new UserNotFoundException("User not found with id "+userId);
@@ -39,7 +62,8 @@ public class UserService {
 	
 	public String updateBalnce(Long userId, BigDecimal newBalance) {
 		
-		User user = users.get(userId);
+		User user = userRepository.findById(userId)
+				.orElseThrow(() -> new UserNotFoundException("User not found"));
 		
 		if(user == null) {
 			throw new UserNotFoundException("User not found with id "+userId);

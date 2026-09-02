@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.stackly.paymentService.dto.PaymentRequestDto;
 import com.stackly.paymentService.dto.PaymentResponseDto;
 import com.stackly.paymentService.dto.TransactionRequestDto;
 import com.stackly.paymentService.dto.TransactionResponseDto;
@@ -27,6 +28,12 @@ import lombok.RequiredArgsConstructor;
 public class PaymentController {
 
 	private final PaymentService paymentService;
+	
+	@PostMapping
+	public PaymentResponseDto createPayment(@Valid 
+			@RequestBody PaymentRequestDto request) {
+		return paymentService.createPayment(request);
+	}
 	
 	@GetMapping("/{paymentId}")
 	public PaymentResponseDto getPaymentById(

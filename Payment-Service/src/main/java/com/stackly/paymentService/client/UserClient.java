@@ -14,10 +14,10 @@ import com.stackly.paymentService.dto.UserResponseDto;
 		name = "User-Service1")
 public interface UserClient {
 	
-	@GetMapping("/users/{userId}")
+	@GetMapping("/api/v1/users/{userId}")
 	UserResponseDto getUserById(@PathVariable("userId") Long userId);
 	
-	@PutMapping("/users/{userId}/balance")
+	@PutMapping("/api/v1/users/{userId}/balance")
 	String updateBalance(
 			@PathVariable("userId") Long userId,
 			@RequestParam("balance") BigDecimal balance);

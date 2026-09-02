@@ -25,8 +25,10 @@ public class UserClientService {
 			name = "userService",
 			type = Bulkhead.Type.SEMAPHORE)
 	
-	@CircuitBreaker(name = "userService",
-					fallbackMethod ="userServiceFallback")
+	@CircuitBreaker(
+			name = "userService",
+			fallbackMethod ="userServiceFallback")
+	
 	@Retryable(
 			retryFor = Exception.class,
 			maxAttempts = 3,
